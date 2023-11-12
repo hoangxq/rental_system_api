@@ -52,7 +52,7 @@ public class AuthServiceImpl implements AuthService {
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
-            return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities);
+            return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
 
         } catch (AuthenticationException authenticationException) {
             throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
