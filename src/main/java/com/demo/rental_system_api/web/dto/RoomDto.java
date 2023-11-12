@@ -9,6 +9,7 @@ public class RoomDto {
     private String name;
     private String type;
     private Float price;
+    private Float roomArea;
     private RoomStatus roomStatus;
     private String description;
     private BuildingDto buildingDto;

@@ -1,16 +1,10 @@
-package com.demo.rental_system_api.model;
+package com.demo.rental_system_api.web.dto;
 
 import com.demo.rental_system_api.model.constants.ClientStatus;
 import lombok.Data;
 
-import javax.persistence.*;
-
 @Data
-@Entity
-@Table(name = "clients")
-public class Client {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class ClientDto {
     private Integer id;
     private String fullName;
     private String phoneNumber;

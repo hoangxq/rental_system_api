@@ -7,6 +7,7 @@ public class CreateRoomRequest {
     private String name;
     private String type;
     private Float price;
+    private Float roomArea;
     private String description;
     private BuildingRequest buildingRequest;
 

@@ -81,7 +81,7 @@ public class RoomServiceImpl implements RoomService {
                         roomId.toString()
                 ));
 
-        mappingHelper.copyProperties(updateRoomRequest, room);
+        mappingHelper.mapIfSourceNotNullAndStringNotBlank(updateRoomRequest, room);
         roomRepository.save(room);
 
         return mapToRoomDto(room);
