@@ -39,7 +39,4 @@ public class SecurityUtils {
             .filter(authentication -> authentication.getCredentials() instanceof String)
             .map(authentication -> (String) authentication.getCredentials());
     }
-
-
-
 }

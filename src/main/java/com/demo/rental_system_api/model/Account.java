@@ -33,4 +33,7 @@ public class Account {
     private String email;
     @Column(name = "role")
     private AuthoritiesConstants role;
+
+    private String activationCode;
+    private boolean active;
 }

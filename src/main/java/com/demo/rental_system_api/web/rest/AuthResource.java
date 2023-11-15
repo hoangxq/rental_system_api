@@ -2,6 +2,7 @@ package com.demo.rental_system_api.web.rest;
 
 import com.demo.rental_system_api.service.AuthService;
 import com.demo.rental_system_api.web.dto.request.LoginRequest;
+import com.demo.rental_system_api.web.dto.request.LoginWithTotpRequest;
 import com.demo.rental_system_api.web.dto.request.SignupRequest;
 import com.demo.rental_system_api.web.dto.response.utils.Response;
 import com.demo.rental_system_api.web.dto.response.utils.ResponseUtils;
@@ -18,7 +19,6 @@ import javax.validation.Valid;
 @RequestMapping("/api/auth")
 @CrossOrigin("*")
 public class AuthResource {
-
     private final AuthService authService;
 
     @PostMapping("/signin")
@@ -30,5 +30,27 @@ public class AuthResource {
     public ResponseEntity<Response> registerAccount(@Valid @RequestBody SignupRequest signupRequest) {
         authService.registerAccount(signupRequest);
         return ResponseUtils.created();
+    }
+
+    @GetMapping("/activate/{code}")
+    public ResponseEntity<Response> activateEmailCode(@PathVariable String code) {
+        authService.activateEmailCode(code);
+        return ResponseUtils.created();
+    }
+
+    @GetMapping("/registerWithTotp")
+    public ResponseEntity<Response> registerTotp() {
+        return ResponseUtils.ok(authService.registerTotp());
+    }
+
+    @GetMapping("/register-totp/{code}")
+    public ResponseEntity<Response> registerTotpCode(@PathVariable String code) {
+        authService.registerTotpCode(code);
+        return ResponseUtils.created();
+    }
+
+    @PostMapping("/active-totp")
+    public ResponseEntity<Response> activeTotpCode(@RequestBody @Valid LoginWithTotpRequest request) {
+        return ResponseUtils.created(authService.activeTotpCode(request));
     }
 }
