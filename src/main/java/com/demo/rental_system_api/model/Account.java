@@ -10,6 +10,7 @@ import lombok.Setter;
 import javax.persistence.*;
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotNull;
+import java.util.Date;
 
 @Getter
 @Setter
@@ -36,4 +37,7 @@ public class Account {
 
     private String activationCode;
     private boolean active;
+
+    private String smsActiveCode;
+    private Date timeCreateSmsActiveCode;
 }

@@ -1,9 +1,7 @@
 package com.demo.rental_system_api.web.rest;
 
 import com.demo.rental_system_api.service.AuthService;
-import com.demo.rental_system_api.web.dto.request.LoginRequest;
-import com.demo.rental_system_api.web.dto.request.LoginWithTotpRequest;
-import com.demo.rental_system_api.web.dto.request.SignupRequest;
+import com.demo.rental_system_api.web.dto.request.*;
 import com.demo.rental_system_api.web.dto.response.utils.Response;
 import com.demo.rental_system_api.web.dto.response.utils.ResponseUtils;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +24,7 @@ public class AuthResource {
         return ResponseUtils.ok(authService.authenticateAccount(loginRequest));
     }
 
+    // E-mail api
     @PostMapping("/signup")
     public ResponseEntity<Response> registerAccount(@Valid @RequestBody SignupRequest signupRequest) {
         authService.registerAccount(signupRequest);
@@ -38,6 +37,7 @@ public class AuthResource {
         return ResponseUtils.created();
     }
 
+    // TOTP api
     @GetMapping("/registerWithTotp")
     public ResponseEntity<Response> registerTotp() {
         return ResponseUtils.ok(authService.registerTotp());
@@ -52,5 +52,17 @@ public class AuthResource {
     @PostMapping("/active-totp")
     public ResponseEntity<Response> activeTotpCode(@RequestBody @Valid LoginWithTotpRequest request) {
         return ResponseUtils.created(authService.activeTotpCode(request));
+    }
+
+    // SMS API
+    @PostMapping("/sms-authenticate")
+    public ResponseEntity<Response> smsAuthenticate(@RequestBody @Valid SmsSenderRequest smsSenderRequest) {
+        authService.smsAuthenticate(smsSenderRequest);
+        return ResponseUtils.created();
+    }
+
+    @PostMapping("/sms-authenticate/active")
+    public ResponseEntity<Response> activeSmsAuthenticate(@RequestBody @Valid LoginWithSmsRequest loginWithSmsRequest) {
+        return ResponseUtils.ok(authService.activeSmsAuthenticate(loginWithSmsRequest));
     }
 }

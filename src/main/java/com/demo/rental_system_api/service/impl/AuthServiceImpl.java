@@ -7,18 +7,18 @@ import com.demo.rental_system_api.repository.SecretTotpKeyRepository;
 import com.demo.rental_system_api.service.AuthService;
 import com.demo.rental_system_api.service.utils.MailSenderService;
 import com.demo.rental_system_api.service.utils.MappingHelper;
-import com.demo.rental_system_api.web.dto.request.LoginRequest;
-import com.demo.rental_system_api.web.dto.request.LoginWithTotpRequest;
-import com.demo.rental_system_api.web.dto.request.SignupRequest;
+import com.demo.rental_system_api.web.dto.request.*;
 import com.demo.rental_system_api.web.dto.response.JwtResponse;
 import com.demo.rental_system_api.web.exception.EntityNotFoundException;
 import com.demo.rental_system_api.web.exception.ServiceException;
 import com.demo.rental_system_api.web.security.AuthoritiesConstants;
 import com.demo.rental_system_api.web.security.SecurityUtils;
 import com.demo.rental_system_api.web.security.jwt.JwtUtils;
+import com.demo.rental_system_api.web.security.sms.SmsSender;
 import com.demo.rental_system_api.web.security.totpUtils.TotpManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -30,10 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +45,10 @@ public class AuthServiceImpl implements AuthService {
     private final MappingHelper mappingHelper;
     private final MailSenderService mailSenderService;
     private final TotpManager totpManager;
+    private final SmsSender smsSender;
+
+    @Value("${security.sms.expiration}")
+    private int smsActiveCodeExpirationMs;
 
     @Override
     public JwtResponse authenticateAccount(LoginRequest loginRequest) {
@@ -115,6 +116,7 @@ public class AuthServiceImpl implements AuthService {
         accountRepository.save(account);
     }
 
+    // TOTP service
     @Override
     public String registerTotp() {
         var username = SecurityUtils.getCurrentUserLogin()
@@ -206,5 +208,77 @@ public class AuthServiceImpl implements AuthService {
         } catch (AuthenticationException authenticationException) {
             throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
         }
+    }
+
+    // SMS service
+    @Override
+    @Transactional
+    public void smsAuthenticate(SmsSenderRequest smsSenderRequest) {
+        var account = accountRepository
+                .findByUsernameOrEmail(smsSenderRequest.getUsername(), smsSenderRequest.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        smsSenderRequest.getUsername()
+                ));
+
+        var activeCode = generateRandomString();
+        account.setSmsActiveCode(activeCode);
+        account.setTimeCreateSmsActiveCode(new Date());
+        accountRepository.save(account);
+
+        String message = "Your active code is: " + activeCode;
+        smsSender.sendSms(new SmsRequest(smsSenderRequest.getPhoneNumber(), message));
+    }
+
+    @Override
+    public JwtResponse activeSmsAuthenticate(LoginWithSmsRequest request) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwtToken = jwtUtils.generateJwtToken(authentication);
+
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            List<String> authorities = userDetails.getAuthorities()
+                    .stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .collect(Collectors.toList());
+
+            var account = accountRepository
+                    .findByUsernameOrEmail(request.getUsername(), request.getUsername())
+                    .orElseThrow(() -> new EntityNotFoundException(
+                            Account.class.getName(),
+                            request.getUsername()
+                    ));
+
+            if (!account.getSmsActiveCode().equals(request.getActiveCode())) throw new ServiceException(
+                    "Code '" + request.getActiveCode() + "' is not matched",
+                    "err.sys.sms-code-not-matched");
+
+            var checkTime = new Date(account.getTimeCreateSmsActiveCode().getTime() + smsActiveCodeExpirationMs);
+            if (checkTime.before(new Date()))
+                throw new ServiceException(
+                        "Code '" + request.getActiveCode() + "' is expired",
+                        "err.sys.sms-code-expired");
+
+            return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
+
+        } catch (AuthenticationException authenticationException) {
+            throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
+        }
+    }
+
+    private static String generateRandomString() {
+        var characters = "0123456789";
+        Random random = new Random();
+        StringBuilder stringBuilder = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            int randomIndex = random.nextInt(characters.length());
+            char randomChar = characters.charAt(randomIndex);
+            stringBuilder.append(randomChar);
+        }
+        return stringBuilder.toString();
     }
 }
