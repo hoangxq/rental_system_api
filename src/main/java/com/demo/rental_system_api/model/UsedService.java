@@ -3,7 +3,6 @@ package com.demo.rental_system_api.model;
 import lombok.Data;
 
 import javax.persistence.*;
-import java.util.Date;
 
 @Data
 @Entity
@@ -13,7 +12,7 @@ public class UsedService {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private Integer quantity;
-    private Float price;
+    private Float totalPrice;
 
     @ManyToOne
     @JoinColumn(name = "service_id")

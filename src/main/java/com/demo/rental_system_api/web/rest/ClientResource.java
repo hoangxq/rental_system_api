@@ -1,10 +1,7 @@
 package com.demo.rental_system_api.web.rest;
 
 import com.demo.rental_system_api.service.ClientService;
-import com.demo.rental_system_api.service.RoomService;
 import com.demo.rental_system_api.web.dto.request.ClientRequest;
-import com.demo.rental_system_api.web.dto.request.CreateRoomRequest;
-import com.demo.rental_system_api.web.dto.request.UpdateRoomRequest;
 import com.demo.rental_system_api.web.dto.response.utils.ResponseUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

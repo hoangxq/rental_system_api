@@ -81,7 +81,20 @@ public class RoomServiceImpl implements RoomService {
                         roomId.toString()
                 ));
 
+        var building = buildingRepository
+                .findByNameAndAddress(
+                        updateRoomRequest.getBuildingRequest().getName(),
+                        updateRoomRequest.getBuildingRequest().getAddress())
+                .orElseGet(() -> {
+                    var newBuilding = mappingHelper.map(
+                            updateRoomRequest.getBuildingRequest(),
+                            Building.class
+                    );
+                    return buildingRepository.save(newBuilding);
+                });
+
         mappingHelper.mapIfSourceNotNullAndStringNotBlank(updateRoomRequest, room);
+        room.setBuilding(building);
         roomRepository.save(room);
 
         return mapToRoomDto(room);

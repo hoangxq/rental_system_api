@@ -11,4 +11,5 @@ public class UpdateRoomRequest {
     private RoomStatus roomStatus;
     private Float price;
     private String description;
+    private CreateRoomRequest.BuildingRequest buildingRequest;
 }

@@ -14,7 +14,7 @@ public class MonthBill {
     private Integer id;
     private Date dueDate;
     private Date paymentDate;
-    private Float price;
+    private Float totalPrice;
     private String note;
 
     @ManyToOne
