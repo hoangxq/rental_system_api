@@ -5,9 +5,9 @@ import lombok.Data;
 import javax.validation.constraints.NotBlank;
 
 @Data
-public class LoginWithTotpRequest {
+public class LoginWithEmailRequest {
     @NotBlank
-    private String username;
+    private String email;
     @NotBlank
     private String activeCode;
 }

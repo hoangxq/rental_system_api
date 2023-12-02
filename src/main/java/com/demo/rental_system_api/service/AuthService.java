@@ -19,4 +19,10 @@ public interface AuthService {
     void smsAuthenticate(SmsSenderRequest smsSenderRequest);
 
     JwtResponse activeSmsAuthenticate(LoginWithSmsRequest loginWithSmsRequest);
+
+    void emailAuthenticate(EmailSenderRequest emailSenderRequest);
+
+    JwtResponse activeEmailAuthenticate(LoginWithEmailRequest loginWithEmailRequest);
+
+    Boolean checkTotpRegister(String username);
 }

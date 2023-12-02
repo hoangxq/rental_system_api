@@ -58,7 +58,6 @@ public class AuthServiceImpl implements AuthService {
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwtToken = jwtUtils.generateJwtToken(authentication);
 
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             List<String> authorities = userDetails.getAuthorities()
@@ -66,20 +65,27 @@ public class AuthServiceImpl implements AuthService {
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.toList());
 
-            var secretTotp = secretTotpKeyRepository
-                    .findByAccount_Username(userDetails.getUsername())
-                    .orElse(null);
+            var account = accountRepository
+                    .findOneByUsername(userDetails.getUsername())
+                    .orElseThrow(() -> new EntityNotFoundException(
+                            Account.class.getName(),
+                            userDetails.getUsername()
+                    ));
 
-            if (secretTotp == null || !secretTotp.getActive())
-                return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
+            if (!account.isActive())
+                throw new ServiceException(
+                        "Account '" + userDetails.getUsername() + "' is not active",
+                        "err.sys.account-is-not-active"
+                );
 
-            return new JwtResponse(loginRequest.getPassword(), "totp", userDetails.getUsername(), authorities.get(0));
+            return new JwtResponse(loginRequest.getPassword(), "auth", userDetails.getUsername(), authorities.get(0));
 
         } catch (AuthenticationException authenticationException) {
             throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
         }
     }
 
+    // Register with email
     @Override
     @Transactional
     public void registerAccount(SignupRequest signupRequest) {
@@ -87,9 +93,9 @@ public class AuthServiceImpl implements AuthService {
             throw new ServiceException("Email or username is existed in system", "err.api.email-username-is-existed");
 
         Account account = new Account();
-        account.setUsername(signupRequest.getUsername());
-        account.setEmail(signupRequest.getEmail());
-        account.setPassword(passwordEncoder.encode(signupRequest.getPassword()));
+        account.setUsername(signupRequest.getUsername().trim());
+        account.setEmail(signupRequest.getEmail().trim());
+        account.setPassword(passwordEncoder.encode(signupRequest.getPassword().trim()));
 
         account.setActive(false);
         account.setActivationCode(UUID.randomUUID().toString());
@@ -158,7 +164,7 @@ public class AuthServiceImpl implements AuthService {
                 ));
 
         var secret = secretTotpKeyRepository
-                .findByAccount_Username(username)
+                .findByAccount_Username(account.getUsername())
                 .orElseThrow(() -> new ServiceException(
                         "unauthorization",
                         "err.sys.unauthorization"
@@ -174,40 +180,34 @@ public class AuthServiceImpl implements AuthService {
         secretTotpKeyRepository.save(secret);
     }
 
+    // authenticate with totp
     @Override
     public JwtResponse activeTotpCode(LoginWithTotpRequest request) {
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-            );
+        var account = accountRepository
+                .findByUsernameOrEmail(request.getUsername(), request.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        request.getUsername()
+                ));
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwtToken = jwtUtils.generateJwtToken(authentication);
+        var secretTotp = secretTotpKeyRepository
+                .findByAccount_Username(account.getUsername())
+                .orElse(null);
 
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            List<String> authorities = userDetails.getAuthorities()
-                    .stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toList());
+        if (secretTotp == null || !secretTotp.getActive())
+            throw new ServiceException(
+                    "You dont register authenticate with totp",
+                    "err.sys.totp-not-register");
 
-            var secretTotp = secretTotpKeyRepository
-                    .findByAccount_Username(userDetails.getUsername())
-                    .orElse(null);
+        boolean codeMatched = totpManager.validateCode(request.getActiveCode(), secretTotp.getSecret());
 
-            if (secretTotp == null || !secretTotp.getActive())
-                return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
+        if (!codeMatched) throw new ServiceException(
+                "Code '" + request.getActiveCode() + "' is not matched",
+                "err.sys.totp-code-not-matched");
 
-            boolean codeMatched = totpManager.validateCode(request.getActiveCode(), secretTotp.getSecret());
+        var jwtToken = jwtUtils.generateJwtTokenWithUsername(account.getUsername());
 
-            if (!codeMatched) throw new ServiceException(
-                    "Code '" + request.getActiveCode() + "' is not matched",
-                    "err.sys.totp-code-not-matched");
-
-            return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
-
-        } catch (AuthenticationException authenticationException) {
-            throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
-        }
+        return new JwtResponse(jwtToken, "Bearer", account.getUsername(), account.getRole().name());
     }
 
     // SMS service
@@ -232,42 +232,80 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public JwtResponse activeSmsAuthenticate(LoginWithSmsRequest request) {
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-            );
+        var account = accountRepository
+                .findByUsernameOrEmail(request.getUsername(), request.getUsername())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        request.getUsername()
+                ));
 
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwtToken = jwtUtils.generateJwtToken(authentication);
+        if (!account.getSmsActiveCode().equals(request.getActiveCode())) throw new ServiceException(
+                "Code '" + request.getActiveCode() + "' is not matched",
+                "err.sys.sms-code-not-matched");
 
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            List<String> authorities = userDetails.getAuthorities()
-                    .stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toList());
+        var checkTime = new Date(account.getTimeCreateSmsActiveCode().getTime() + smsActiveCodeExpirationMs);
+        if (checkTime.before(new Date()))
+            throw new ServiceException(
+                    "Code '" + request.getActiveCode() + "' is expired",
+                    "err.sys.sms-code-expired");
 
-            var account = accountRepository
-                    .findByUsernameOrEmail(request.getUsername(), request.getUsername())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            Account.class.getName(),
-                            request.getUsername()
-                    ));
+        var jwtToken = jwtUtils.generateJwtTokenWithUsername(account.getUsername());
 
-            if (!account.getSmsActiveCode().equals(request.getActiveCode())) throw new ServiceException(
-                    "Code '" + request.getActiveCode() + "' is not matched",
-                    "err.sys.sms-code-not-matched");
+        return new JwtResponse(jwtToken, "Bearer", account.getUsername(), account.getRole().name());
+    }
 
-            var checkTime = new Date(account.getTimeCreateSmsActiveCode().getTime() + smsActiveCodeExpirationMs);
-            if (checkTime.before(new Date()))
-                throw new ServiceException(
-                        "Code '" + request.getActiveCode() + "' is expired",
-                        "err.sys.sms-code-expired");
+    //Email authenticate
+    @Override
+    @Transactional
+    public void emailAuthenticate(EmailSenderRequest emailSenderRequest) {
+        var account = accountRepository
+                .findByUsernameAndEmail(emailSenderRequest.getUsername(), emailSenderRequest.getEmail())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        emailSenderRequest.getUsername()
+                ));
+        account.setActivationCode(UUID.randomUUID().toString());
+        accountRepository.save(account);
 
-            return new JwtResponse(jwtToken, "Bearer", userDetails.getUsername(), authorities.get(0));
+        String subject = "Activation code";
+        String template = "mail-active";
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put("firstName", account.getUsername());
+        attributes.put("activeCode", account.getActivationCode());
+        mailSenderService.sendMessageHtml(account.getEmail(), subject, template, attributes);
+    }
 
-        } catch (AuthenticationException authenticationException) {
-            throw new ServiceException("Username or password is invalid", "err.authorize.unauthorized");
-        }
+    @Override
+    public JwtResponse activeEmailAuthenticate(LoginWithEmailRequest loginWithEmailRequest) {
+        var account = accountRepository
+                .findOneByEmail(loginWithEmailRequest.getEmail())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        loginWithEmailRequest.getEmail()
+                ));
+
+        if (!account.getActivationCode().equals(loginWithEmailRequest.getActiveCode())) throw new ServiceException(
+                "Code '" + loginWithEmailRequest.getActiveCode() + "' is not matched",
+                "err.sys.email-code-not-matched");
+
+        var jwtToken = jwtUtils.generateJwtTokenWithUsername(account.getUsername());
+
+        return new JwtResponse(jwtToken, "Bearer", account.getUsername(), account.getRole().name());
+    }
+
+    @Override
+    public Boolean checkTotpRegister(String username) {
+        var account = accountRepository
+                .findByUsernameOrEmail(username, username)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        Account.class.getName(),
+                        username
+                ));
+
+        var secretTotp = secretTotpKeyRepository
+                .findByAccount_Username(account.getUsername());
+
+        return secretTotp.isPresent();
     }
 
     private static String generateRandomString() {

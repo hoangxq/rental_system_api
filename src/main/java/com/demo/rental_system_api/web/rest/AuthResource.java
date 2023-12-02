@@ -24,7 +24,7 @@ public class AuthResource {
         return ResponseUtils.ok(authService.authenticateAccount(loginRequest));
     }
 
-    // E-mail api
+    // E-mail api signup
     @PostMapping("/signup")
     public ResponseEntity<Response> registerAccount(@Valid @RequestBody SignupRequest signupRequest) {
         authService.registerAccount(signupRequest);
@@ -54,6 +54,11 @@ public class AuthResource {
         return ResponseUtils.created(authService.activeTotpCode(request));
     }
 
+    @GetMapping("/check-totp-register/{username}")
+    public ResponseEntity<Response> checkTotpRegister(@PathVariable String username) {
+        return ResponseUtils.ok(authService.checkTotpRegister(username));
+    }
+
     // SMS API
     @PostMapping("/sms-authenticate")
     public ResponseEntity<Response> smsAuthenticate(@RequestBody @Valid SmsSenderRequest smsSenderRequest) {
@@ -64,5 +69,17 @@ public class AuthResource {
     @PostMapping("/sms-authenticate/active")
     public ResponseEntity<Response> activeSmsAuthenticate(@RequestBody @Valid LoginWithSmsRequest loginWithSmsRequest) {
         return ResponseUtils.ok(authService.activeSmsAuthenticate(loginWithSmsRequest));
+    }
+
+    // Email API authenticate
+    @PostMapping("/email-authenticate")
+    public ResponseEntity<Response> emailAuthenticate(@RequestBody @Valid EmailSenderRequest emailSenderRequest) {
+        authService.emailAuthenticate(emailSenderRequest);
+        return ResponseUtils.created();
+    }
+
+    @PostMapping("/email-authenticate/active")
+    public ResponseEntity<Response> activeEmailAuthenticate(@RequestBody @Valid LoginWithEmailRequest loginWithEmailRequest) {
+        return ResponseUtils.ok(authService.activeEmailAuthenticate(loginWithEmailRequest));
     }
 }
